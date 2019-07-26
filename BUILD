@@ -123,3 +123,17 @@ cc_binary(
         "@com_google_absl//absl/time",
     ],
 )
+
+cc_binary(
+    name = "unified_bench",
+    srcs = ["unified_bench.cc"],
+    deps = [
+        ":client_lib",
+        ":data_util",
+        ":server_lib",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/time",
+    ],
+)

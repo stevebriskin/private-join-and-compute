@@ -19,10 +19,14 @@
 #include <iterator>
 
 #include "absl/memory/memory.h"
+#include "absl/time/time.h"
+#include "absl/time/clock.h"
 
 namespace private_join_and_compute {
 
 using ::util::StatusOr;
+using absl::Duration;
+using absl::Time;
 
 Client::Client(Context* ctx, const std::vector<std::string>& elements,
                const std::vector<BigNum>& values, int32_t modulus_size)
@@ -49,6 +53,9 @@ Client::Client(Context* ctx, const std::string& serialized)
 }
 
 StatusOr<ClientRoundOne> Client::ReEncryptSet(const ServerRoundOne& message) {
+
+  // TODO This includes encryption of the element and data, split them.
+  Time encrypt_client_start = absl::Now();
   private_paillier_ = absl::make_unique<PrivatePaillier>(ctx_, p_, q_, 2);
   BigNum pk = p_ * q_;
   ClientRoundOne result;
@@ -66,7 +73,11 @@ StatusOr<ClientRoundOne> Client::ReEncryptSet(const ServerRoundOne& message) {
     }
     *element->mutable_associated_data() = value.ValueOrDie().ToBytes();
   }
+  Time encrypt_client_end = absl::Now();
+  AddStat("ClientDataEncryptTime", encrypt_client_end - encrypt_client_start);
 
+
+  Time encrypt_server_start = absl::Now();
   std::vector<EncryptedElement> reencrypted_set;
   for (const EncryptedElement& element : message.encrypted_set().elements()) {
     EncryptedElement reencrypted;
@@ -77,6 +88,10 @@ StatusOr<ClientRoundOne> Client::ReEncryptSet(const ServerRoundOne& message) {
     *reencrypted.mutable_element() = reenc.ValueOrDie();
     reencrypted_set.push_back(reencrypted);
   }
+  Time encrypt_server_end = absl::Now();
+  AddStat("ServerDataReEncryptTime", encrypt_server_end - encrypt_server_start);
+
+  // TODO is this sort needed? The server does it too.
   std::sort(reencrypted_set.begin(), reencrypted_set.end(),
             [](const EncryptedElement& a, const EncryptedElement& b) {
               return a.element() < b.element();
@@ -94,11 +109,15 @@ StatusOr<std::pair<int64_t, BigNum>> Client::DecryptSum(
     return util::InvalidArgumentError("Called DecryptSum before ReEncryptSet.");
   }
 
+  Time decrypt_sum_start = absl::Now();
   StatusOr<BigNum> sum = private_paillier_->Decrypt(
       ctx_->CreateBigNum(server_message.encrypted_sum()));
   if (!sum.ok()) {
     return sum.status();
   }
+  Time decrypt_sum_end = absl::Now();
+  AddStat("DecryptSumTime", decrypt_sum_end - decrypt_sum_start);
+
   return std::make_pair(server_message.intersection_size(), sum.ValueOrDie());
 }
 

@@ -73,7 +73,7 @@ StatusOr<ServerRoundOne> Server::EncryptSet() {
 
   Time end = absl::Now();
 
-  AddStat("ServerEncryptTime", (end - start));
+  AddStat("ServerDataEncryptTime", (end - start));
 
   return result;
 }
@@ -109,7 +109,7 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
     server_set.push_back(element);
   }
   Time end_reencrypt = absl::Now();
-  AddStat("ClientEncryptTime", end_reencrypt - start_reencrypt);
+  AddStat("ClientDataReEncryptTime", end_reencrypt - start_reencrypt);
 
   Time start_client_sort = absl::Now();
   // std::set_intersection requires sorted inputs.
@@ -118,7 +118,7 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
               return a.element() < b.element();
             });
   Time end_client_sort = absl::Now();
-  AddStat("ClientSort", end_client_sort - start_client_sort);
+  AddStat("ClientDataSort", end_client_sort - start_client_sort);
 
   Time start_server_sort = absl::Now();
   std::sort(server_set.begin(), server_set.end(),
@@ -126,7 +126,7 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
               return a.element() < b.element();
             });
   Time end_server_sort = absl::Now();
-  AddStat("ServerSort", end_server_sort - start_server_sort);
+  AddStat("ServerDataSort", end_server_sort - start_server_sort);
 
   Time start_intersection = absl::Now();
   std::set_intersection(
@@ -136,7 +136,7 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
         return a.element() < b.element();
       });
   Time end_intersection = absl::Now();
-  AddStat("Intersection", end_intersection - start_intersection);
+  AddStat("FindIntersection", end_intersection - start_intersection);
 
   Time start_compute = absl::Now();
   // From the intersection we compute the sum of the associated values, which is

@@ -55,7 +55,8 @@ class Server {
 
   // Stats
   const std::map<std::string, absl::Duration>& GetAllStats() const { return stats_;}
-  void AddStat(std::string k, absl::Duration v) { stats_[k] = v;}
+  const std::vector<std::string>& GetStatsKeysInOrder() const { return stats_keys_;}
+  void AddStat(std::string k, absl::Duration v) { stats_keys_.push_back(k); stats_[k] = v;}
   absl::Duration GetStat(const std::string k) const { return stats_.find(k)->second;}
 
  private:
@@ -66,8 +67,7 @@ class Server {
 
   // stats
   std::map<std::string, absl::Duration> stats_;
-
-
+  std::vector<std::string> stats_keys_;
 };
 
 }  // namespace private_join_and_compute
