@@ -21,6 +21,8 @@
 #include "match.pb.h"
 #include "util/status.inc"
 #include "crypto/ec_commutative_cipher.h"
+#include "absl/time/time.h"
+#include <map>
 
 namespace private_join_and_compute {
 
@@ -51,11 +53,21 @@ class Server {
 
   std::string GetSerializedState() const;
 
+  // Stats
+  const std::map<std::string, absl::Duration>& GetAllStats() const { return stats_;}
+  void AddStat(std::string k, absl::Duration v) { stats_[k] = v;}
+  absl::Duration GetStat(const std::string k) const { return stats_.find(k)->second;}
+
  private:
   ::private_join_and_compute::Context* ctx_;  // not owned
   std::unique_ptr<ECCommutativeCipher> ec_cipher_;
 
   std::vector<std::string> inputs_;
+
+  // stats
+  std::map<std::string, absl::Duration> stats_;
+
+
 };
 
 }  // namespace private_join_and_compute

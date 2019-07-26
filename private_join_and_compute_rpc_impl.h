@@ -44,6 +44,7 @@ class PrivateJoinAndComputeRpcImpl : public PrivateJoinAndComputeRpc::Service {
                                        ServerRoundTwo* response) override;
 
   bool protocol_finished() const { return protocol_finished_; }
+  Server* getServer() const { return server_.get();}
 
  private:
   std::unique_ptr<Server> server_;

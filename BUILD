@@ -31,6 +31,7 @@ cc_library(
         "//util:status",
         "//util:status_includes",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -46,6 +47,7 @@ cc_library(
         "//util:status",
         "//util:status_includes",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -60,6 +62,7 @@ cc_library(
         "//util:status_includes",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -73,9 +76,9 @@ cc_binary(
         "@com_google_absl//absl/base",
     ],
 )
+
 cc_library(
     name = "private_join_and_compute_rpc_impl",
-
     srcs = ["private_join_and_compute_rpc_impl.cc"],
     hdrs = ["private_join_and_compute_rpc_impl.h"],
     deps = [
@@ -100,6 +103,7 @@ cc_binary(
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -116,5 +120,6 @@ cc_binary(
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/time",
     ],
 )

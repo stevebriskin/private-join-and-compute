@@ -72,6 +72,11 @@ int RunServer() {
     // Wait for the server to be done, and then shut the server down.
   }
 
+  std::cout << "Run stats: " << std::endl;
+  for (auto stat : service.getServer()->GetAllStats()) {
+    std::cout << "\t" << stat.first << "=" << absl::ToInt64Milliseconds(stat.second) << std::endl;
+  }
+
   // Shut down server.
   grpc_server->Shutdown();
   grpc_server_thread.join();

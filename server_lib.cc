@@ -20,14 +20,19 @@
 #include "crypto/paillier.h"
 #include "crypto/ec_commutative_cipher.h"
 #include "absl/memory/memory.h"
+#include "absl/time/time.h"
+#include "absl/time/clock.h"
 
 using ::private_join_and_compute::BigNum;
 using ::private_join_and_compute::Context;
 using ::private_join_and_compute::ECCommutativeCipher;
 using ::private_join_and_compute::PublicPaillier;
 using ::util::StatusOr;
+using absl::Duration;
+using absl::Time;
 
 namespace private_join_and_compute {
+
 
 Server::Server(Context* ctx, const std::vector<std::string>& inputs)
     : ctx_(ctx), inputs_(inputs) {}
@@ -53,6 +58,8 @@ StatusOr<ServerRoundOne> Server::EncryptSet() {
   }
   ec_cipher_ = std::move(ec_cipher.ValueOrDie());
 
+  Time start = absl::Now();
+
   ServerRoundOne result;
   for (const std::string& input : inputs_) {
     EncryptedElement* encrypted =
@@ -63,6 +70,10 @@ StatusOr<ServerRoundOne> Server::EncryptSet() {
     }
     *encrypted->mutable_element() = encrypted_element.ValueOrDie();
   }
+
+  Time end = absl::Now();
+
+  AddStat("ServerEncryptTime", (end - start));
 
   return result;
 }
@@ -79,6 +90,7 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
 
   std::vector<EncryptedElement> server_set, client_set, intersection;
 
+  Time start_reencrypt = absl::Now();
   // First, we re-encrypt the client party's set, so that we can compare with
   // the re-encrypted set received from the client.
   for (const EncryptedElement& element :
@@ -96,23 +108,37 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
        client_message.reencrypted_set().elements()) {
     server_set.push_back(element);
   }
+  Time end_reencrypt = absl::Now();
+  AddStat("ClientEncryptTime", end_reencrypt - start_reencrypt);
 
+  Time start_client_sort = absl::Now();
   // std::set_intersection requires sorted inputs.
   std::sort(client_set.begin(), client_set.end(),
             [](const EncryptedElement& a, const EncryptedElement& b) {
               return a.element() < b.element();
             });
+  Time end_client_sort = absl::Now();
+  AddStat("ClientSort", end_client_sort - start_client_sort);
+
+  Time start_server_sort = absl::Now();
   std::sort(server_set.begin(), server_set.end(),
             [](const EncryptedElement& a, const EncryptedElement& b) {
               return a.element() < b.element();
             });
+  Time end_server_sort = absl::Now();
+  AddStat("ServerSort", end_server_sort - start_server_sort);
+
+  Time start_intersection = absl::Now();
   std::set_intersection(
       client_set.begin(), client_set.end(), server_set.begin(),
       server_set.end(), std::back_inserter(intersection),
       [](const EncryptedElement& a, const EncryptedElement& b) {
         return a.element() < b.element();
       });
+  Time end_intersection = absl::Now();
+  AddStat("Intersection", end_intersection - start_intersection);
 
+  Time start_compute = absl::Now();
   // From the intersection we compute the sum of the associated values, which is
   // the result we return to the client.
   StatusOr<BigNum> encrypted_zero =
@@ -125,8 +151,11 @@ StatusOr<ServerRoundTwo> Server::ComputeIntersection(
     sum =
         public_paillier.Add(sum, ctx_->CreateBigNum(element.associated_data()));
   }
-
   *result.mutable_encrypted_sum() = sum.ToBytes();
+
+  Time end_compute = absl::Now();
+  AddStat("Compute", end_compute - start_compute);
+
   result.set_intersection_size(intersection.size());
   return result;
 }
