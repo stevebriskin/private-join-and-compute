@@ -51,6 +51,18 @@ DEFINE_string(server_data_file,
 "",
 "The file from which to read the server database.");
 
+DEFINE_int64(server_data_size, 100,
+             "Number of dummy identifiers in server database.");
+DEFINE_int64(
+    client_data_size, 100,
+    "Number of dummy identifiers and associated values in client database.");
+DEFINE_int64(intersection_size, 50,
+             "Number of items in the intersection. Must be less than the "
+             "server and client data sizes.");
+DEFINE_int64(max_associated_value, 100,
+             "Dummy associated values for the client will be between 0 and "
+             "this. Must be nonnegative.");
+
 namespace {
   Context client_context;
   Context server_context;
@@ -80,8 +92,6 @@ namespace {
     return util::OkStatus();
   }
 
-
-
   StatusOr<std::pair<int64_t, BigNum>> RunMatch() {
     // encrypt server only
     Time server_encrypt_start = absl::Now();
@@ -105,43 +115,82 @@ namespace {
 
     return toRet;
   }
+
+  util::StatusOr<std::tuple<
+    std::vector<std::string>,
+    std::pair<std::vector<std::string>, std::vector<BigNum>>>> GetClientServerData() {
+
+    if (FLAGS_server_data_file.empty() && FLAGS_client_data_file.empty()) {
+      std::cout << "Generating data" << std::endl;
+
+      auto generated = private_join_and_compute::GenerateRandomDatabases(
+          FLAGS_server_data_size,
+          FLAGS_client_data_size,
+          FLAGS_intersection_size,
+          FLAGS_max_associated_value);
+
+      if (!generated.ok()) {
+        return util::InternalError("Failed to generate data");
+      }
+
+      std::vector<std::string> server_values = std::move(std::get<0>(generated.ValueOrDie()));
+      std::pair<std::vector<std::string>, std::vector<int64_t>> client_values = std::move(std::get<1>(generated.ValueOrDie()));
+
+      std::vector<BigNum> values;
+      for (int64_t v : client_values.second) {
+        values.push_back(client_context.CreateBigNum(v));
+      }
+
+      return std::make_tuple(std::move(server_values), std::make_pair(std::move(client_values.first), std::move(values)));
+    } else {
+      std::cout << "Loading data from files" << std::endl;
+      std::cout << "Loading server data... " << std::endl;
+      auto maybe_server_identifiers =
+          ::private_join_and_compute::ReadServerDatasetFromFile(
+              FLAGS_server_data_file);
+      if (!maybe_server_identifiers.ok()) {
+        std::cerr << "Failed loading server data:"
+                  << maybe_server_identifiers.status()
+                  << std::endl;
+        return util::InternalError("failed to load server data");
+      }
+
+      std::cout << "Loading client data..." << std::endl;
+      auto maybe_client_identifiers_and_associated_values =
+          ::private_join_and_compute::ReadClientDatasetFromFile(
+              FLAGS_client_data_file,
+              &client_context);
+      if (!maybe_client_identifiers_and_associated_values.ok()) {
+        return util::InternalError("failed to load client data");
+      }
+
+      return std::make_tuple(std::move(maybe_server_identifiers.ValueOrDie()),
+                                 std::move(maybe_client_identifiers_and_associated_values.ValueOrDie()));
+    }
+  }
 }
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  auto client_server_data = GetClientServerData();
+  if (!client_server_data.ok()) {
+    std::cout << "Failed to load data" << std::endl;
+    return 1;
+  }
+  auto server_data = std::get<0>(client_server_data.ValueOrDie());
+  auto client_data = std::get<1>(client_server_data.ValueOrDie());
+
+  std::cout << "Num server records: " << server_data.size() << std::endl;
+  InitServer(server_data);
+
+  std::cout << "Num client records: " << client_data.first.size() << std::endl;
+  InitClient(client_data.first, client_data.second);
+
+  std::cout << "Data loaded, starting matching" << std::endl;
+
   Time start = absl::Now();
-  std::cout << "Loading server data... " << std::endl;
-  auto maybe_server_identifiers =
-      ::private_join_and_compute::ReadServerDatasetFromFile(
-          FLAGS_server_data_file);
-  if (!maybe_server_identifiers.ok()) {
-    std::cerr << "Failed loading server data:"
-              << maybe_server_identifiers.status()
-              << std::endl;
-    return 1;
-  }
-  std::cout << "Num server records: " << maybe_server_identifiers.ValueOrDie().size() << std::endl;
-  InitServer(maybe_server_identifiers.ValueOrDie());
-
-  std::cout << "Loading client data..." << std::endl;
-  auto maybe_client_identifiers_and_associated_values =
-      ::private_join_and_compute::ReadClientDatasetFromFile(
-          FLAGS_client_data_file,
-          &client_context);
-  if (!maybe_client_identifiers_and_associated_values.ok()) {
-    std::cerr << "Failed loading client data:"
-              << maybe_client_identifiers_and_associated_values.status()
-              << std::endl;
-    return 1;
-  }
-  auto client_identifiers_and_associated_values =
-      std::move(maybe_client_identifiers_and_associated_values.ValueOrDie());
-  std::cout << "Num client records: " << client_identifiers_and_associated_values.first.size() << std::endl;
-  InitClient(client_identifiers_and_associated_values.first,
-             client_identifiers_and_associated_values.second);
-
   auto decrypted_sum = RunMatch();
   Time end = absl::Now();
 
@@ -161,6 +210,6 @@ int main(int argc, char** argv) {
   std::cout << "Total client time: " << absl::ToInt64Milliseconds(client_time) << std::endl;
   std::cout << "Total server time: " << absl::ToInt64Milliseconds(server_time) << std::endl;
   std::cout << "Total time: " << absl::ToInt64Milliseconds(end-start) << std::endl;
-  
+
   return 0;
 }
